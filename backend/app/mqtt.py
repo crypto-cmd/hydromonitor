@@ -16,7 +16,7 @@ class MQTT:
     ID = f"IOT_B_{randint(1,1000000)}"
 
     #  1. DEFINE ALL TOPICS TO SUBSCRIBE TO. BELOW ARE SOME EXAMPLES. YOUR ARE REQUIRED TO CHANGE THESE TO TOPICS THAT FITS YOUR USE CASE
-    sub_topics = [("620012345_pub", 0), ("620012345", 0), ("620012345_sub", 0)] #  A list of tuples of (topic, qos). Both topic and qos must be present in the tuple.
+    sub_topics = [("620164974_pub", 0), ("620164974", 0), ("620164974_sub", 0)] #  A list of tuples of (topic, qos). Both topic and qos must be present in the tuple.
 
 
     def __init__(self,mongo):
@@ -35,11 +35,11 @@ class MQTT:
 
         # 3. REGISTER CALLBACK FUNCTION(S) FOR EACH TOPIC USING THE self.client.message_callback_add("topic",self.function) FUNCTION
         # WHICH TAKES A TOPIC AND THE NAME OF THE CALLBACK FUNCTION YOU HAVE CREATED FOR THIS SPECIFIC TOPIC
-
+        self.client.message_callback_add("620164974", self.update)
          
 
         # 4. UPDATE MQTT SERVER AND PORT INFORMATION BELOW
-        self.client.connect_async("localhost", 1883, 60)
+        self.client.connect_async("broker.emqx.io", 1883, 60)
        
 
 
@@ -82,7 +82,20 @@ class MQTT:
    
 
     # 2. DEFINE CALLBACK FUNCTIONS(S) BELOW FOR EACH TOPIC(S) THE BACKEND SUBSCRIBES TO 
-     
+
+    """implement a callback function called “update” which must inserts the sensor data published by the 
+    hardware component into the 'climo' collection of the ELET2415 database"""
+    def gdp(self, client, userdata, msg):
+        try:
+            topic = msg.topic
+            payload = msg.payload.decode("utf-8")
+            print(payload)  # UNCOMMENT WHEN DEBUGGING
+
+            update = loads(payload)  # CONVERT FROM JSON STRING TO JSON OBJECT
+            self.mongo.addUpdate(update)  # INSERT INTO DATABASE
+
+        except Exception as e:
+            print(f"MQTT: GDP Error: {str(e)}")
 
 
      
