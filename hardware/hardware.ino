@@ -9,6 +9,8 @@
 #include <ctype.h>
 
 // ADD YOUR IMPORTS HERE
+#include <FastLED.h>
+#include <DHT.h>
 
 #ifndef _WIFI_H
 #include <WiFi.h>
@@ -32,8 +34,14 @@
 
 // DEFINE VARIABLES
 #define ARDUINOJSON_USE_DOUBLE 1
+#define NUM_LED 7
+
+#define DATA_PIN 27
+#define CLOCK_PIN 13
 
 // DEFINE THE CONTROL PINS FOR THE DHT22
+#define DHTPIN 26
+#define DHTTYPE DHT22
 
 // MQTT CLIENT CONFIG
 static const char *pubtopic = "620164974";                      // Add your ID number here
@@ -69,6 +77,7 @@ double convert_fahrenheit_to_Celsius(double f);
 double calcHeatIndex(double Temp, double Humid);
 
 /* Init class Instances for the DHT22 etcc */
+DHT dht(DHTPIN, DHTTYPE);
 
 // ############### IMPORT HEADER FILES ##################
 #ifndef NTP_H
@@ -80,22 +89,44 @@ double calcHeatIndex(double Temp, double Humid);
 #endif
 
 // Temporary Variables
+CRGB ledArray[NUM_LED];
 
 void setup()
 {
   Serial.begin(115200); // INIT SERIAL
 
+  WiFi.begin(ssid, password);
   // INITIALIZE ALL SENSORS AND DEVICES
+  dht.begin();
+  // INITIALIZE ALL SENSORS AND DEVICES
+  FastLED.addLeds<NEOPIXEL, DATA_PIN>(ledArray, NUM_LED);
 
-  /* Add all other necessary sensor Initializations and Configurations here */
+  for (int x = 0; x < 7; x++)
+  {
+    ledArray[x] = CRGB(240, 0, 240);
+    FastLED.setBrightness(200);
+    FastLED.show();
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+  }
+  for (int x = 0; x < NUM_LED; x++)
+  {
+    ledArray[x] = CRGB::Black;
+    FastLED.setBrightness(200);
+    FastLED.show();
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+  }
+
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
     Serial.print(".");
   }
 
+  Serial.println("\n\n***** Wi-Fi CONNECTED! *****\n\n");
+
   initialize(); // INIT WIFI, MQTT & NTP
-                // vButtonCheckFunction(); // UNCOMMENT IF USING BUTTONS INT THIS LAB, THEN ADD LOGIC FOR INTERFACING WITH BUTTONS IN THE vButtonCheck FUNCTION
+  Serial.println("Init");
+  //vButtonCheckFunction(); // UNCOMMENT IF USING BUTTONS INT THIS LAB, THEN ADD LOGIC FOR INTERFACING WITH BUTTONS IN THE vButtonCheck FUNCTION
 }
 
 void loop()
@@ -131,42 +162,38 @@ void vUpdate(void *pvParameters)
     // #######################################################
 
     // 1. Read Humidity and save in variable below
-    double h = 0;
+    double h = dht.readHumidity();
 
     // 2. Read temperature as Celsius   and save in variable below
-    double t = 0;
+    double t = dht.readTemperature();
 
     if (isNumber(t))
     {
-      // ##Publish update according to ‘{"id": "student_id", "timestamp": 1702212234, "temperature": 30, "humidity":90, "heatindex": 30}’
 
-      // 1. Create JSon object
+      double heatIndex = calcHeatIndex(convert_Celsius_to_fahrenheit(t), h);
 
-      // 2. Create message buffer/array to store serialized JSON object
+      Serial.print("Humidity: ");
+      Serial.print(h);
+      Serial.print("%    Temperature: ");
+      Serial.print(t);
+      Serial.print("°C    Heat Index: ");
+      Serial.print(heatIndex);
+      Serial.println("∘F");
 
-      // 3. Add key:value pairs to JSon object based on above schema
+      JsonDocument doc;
+      char message[800] = {0};
 
-      // 4. Seralize / Covert JSon object to JSon string and store in message array
-
-      // 5. Publish message to a topic sobscribed to by both backend and frontend
-
-      JsonDocument doc; // Create JSon object
-      char message[1100] = {0};
-
-      // Add key:value pairs to JSon object
-      doc["id"] = "620164974"; // Change to your student ID number
+      doc["id"] = "620164974";
       doc["timestamp"] = getTimeStamp();
       doc["temperature"] = t;
       doc["humidity"] = h;
-      doc["heatindex"] = calcHeatIndex(t, h);
+      doc["heatindex"] = heatIndex;
 
-      serializeJson(doc, message); // Seralize / Covert JSon object to JSon string and store in char* array
+      serializeJson(doc, message);
 
       if (mqtt.connected())
       {
         publish(pubtopic, message);
-      } else {
-        Serial.println("MQTT not connected. Cannot publish");
       }
     }
 
@@ -214,19 +241,30 @@ void callback(char *topic, byte *payload, unsigned int length)
 
   if (strcmp(type, "controls") == 0)
   {
-    // 1. EXTRACT ALL PARAMETERS: NODES, RED,GREEN, BLUE, AND BRIGHTNESS FROM JSON OBJECT
-    const char *nodes = doc["nodes"];
-    const char *red = doc["red"];
-    const char *green = doc["green"];
-    const char *blue = doc["blue"];
-    const char *brightness = doc["brightness"];
-
+    Serial.println("Update LEDS");
+    // 1. EXTRACT ALL PARAMETERS: LEDS, RED,GREEN, BLUE, AND BRIGHTNESS FROM JSON OBJECT
+    int leds = doc["leds"];
+    int red = doc["color"]["r"];
+    int green = doc["color"]["g"];
+    int blue = doc["color"]["b"];
+    int brightness = doc["brightness"];
 
     // 2. ITERATIVELY, TURN ON LED(s) BASED ON THE VALUE OF NODES. Ex IF NODES = 2, TURN ON 2 LED(s)
-    turnOnLEDs(nodes, red, green, blue, brightness);
-
+    for (int x = 0; x < leds; x++)
+    {
+      ledArray[x] = CRGB(red, green, blue); // R, G, B range for each value is 0 to 255
+      FastLED.setBrightness(brightness);    // Ranges from 0 to 255
+      FastLED.show();                       // Send changes to LED array
+      vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
     // 3. ITERATIVELY, TURN OFF ALL REMAINING LED(s).
-    turnOffLEDs(nodes);
+    for (int x = leds; x < NUM_LED; x++)
+    {
+      ledArray[x] = CRGB::Black;
+      FastLED.setBrightness(brightness);
+      FastLED.show();
+      vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
   }
 }
 
@@ -252,15 +290,19 @@ bool publish(const char *topic, const char *payload)
 
 //***** Complete the util functions below ******
 
-double convert_Celsius_to_fahrenheit(double c){
-    return c * 9 / 5 + 32}
+double convert_Celsius_to_fahrenheit(double c)
+{
+  return c * 9 / 5 + 32;
+}
 
-double convert_fahrenheit_to_Celsius(double f){
-    return (f - 32) * 5 / 9}
+double convert_fahrenheit_to_Celsius(double f)
+{
+  return (f - 32) * 5 / 9;
+}
 
 double calcHeatIndex(double Temp, double Humid)
 {
-  double heatIndex = -42.379 + 2.04901523 * Temp - 10.14333127 * Humid - 0.22475541 * Temp * Humid - 6.83783e-3 * Temp * Temp - 5.481717e-2 * Humid * Humid - 1.22874e-3 * Temp * Temp * Humid + 8.5282e-4 * Temp * Humid * Humid - 1.99e-6 * Temp * Temp * Humid * Humid;
+  double heatIndex = -42.379 + 2.04901523 * Temp + 10.14333127 * Humid - 0.22475541 * Temp * Humid - 6.83783e-3 * Temp * Temp - 5.481717e-2 * Humid * Humid + 1.22874e-3 * Temp * Temp * Humid + 8.5282e-4 * Temp * Humid * Humid - 1.99e-6 * Temp * Temp * Humid * Humid;
   return heatIndex;
 }
 

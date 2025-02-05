@@ -159,7 +159,7 @@ void vNTPFunction( void ) {
 
     if( xReturned == pdPASS ) {  
       // The task was created.  Use the task's handle to delete the task. 
-      //  Serial.println("NTP PROTOCOL TASK CREATED");
+       Serial.println("NTP PROTOCOL TASK CREATED");
     }
     else {
        Serial.println("UNABLE TO CREATE NTP PROTOCOL TASK");

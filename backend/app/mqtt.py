@@ -35,7 +35,7 @@ class MQTT:
 
         # 3. REGISTER CALLBACK FUNCTION(S) FOR EACH TOPIC USING THE self.client.message_callback_add("topic",self.function) FUNCTION
         # WHICH TAKES A TOPIC AND THE NAME OF THE CALLBACK FUNCTION YOU HAVE CREATED FOR THIS SPECIFIC TOPIC
-        self.client.message_callback_add("620164974", self.update)
+        self.client.message_callback_add("620164974", self.addUpdate)
          
 
         # 4. UPDATE MQTT SERVER AND PORT INFORMATION BELOW
@@ -85,7 +85,7 @@ class MQTT:
 
     """implement a callback function called “update” which must inserts the sensor data published by the 
     hardware component into the 'climo' collection of the ELET2415 database"""
-    def gdp(self, client, userdata, msg):
+    def addUpdate(self, client, userdata, msg):
         try:
             topic = msg.topic
             payload = msg.payload.decode("utf-8")
@@ -95,7 +95,7 @@ class MQTT:
             self.mongo.addUpdate(update)  # INSERT INTO DATABASE
 
         except Exception as e:
-            print(f"MQTT: GDP Error: {str(e)}")
+            print(f"MQTT: Update Error: {str(e)}")
 
 
      
